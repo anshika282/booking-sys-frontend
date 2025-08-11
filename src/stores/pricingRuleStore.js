@@ -75,6 +75,22 @@ export const usePricingRuleStore = defineStore('pricingRules', () => {
     }
   }
 
+  const deleteRule = async (serviceId, ruleId) => {
+    try {
+      await api.delete(`/services/${serviceId}/pricing/${ruleId}`)
+      // Remove the rule from the local state for instant UI update
+      const index = rules.value.findIndex((r) => r.id === ruleId)
+      if (index > -1) {
+        const ruleName = rules.value[index].name
+        rules.value.splice(index, 1)
+        toast({ title: 'Rule Deleted', description: `The rule "${ruleName}" has been deleted.` })
+      }
+    } catch (error) {
+      console.error('Failed to delete pricing rule:', error)
+      toast({ title: 'Error', description: 'Could not delete the rule.', variant: 'destructive' })
+    }
+  }
+
   return {
     rules,
     serviceName,
@@ -85,5 +101,6 @@ export const usePricingRuleStore = defineStore('pricingRules', () => {
     reorderRule,
     updateRuleOrder,
     saveOrder,
+    deleteRule,
   }
 })

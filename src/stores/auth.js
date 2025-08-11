@@ -92,6 +92,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
     isInitiallyLoading.value = false // Mark initial loading as complete
   }
+
+  /**
+   * Logs a user in using a token received from the API (e.g., after password reset).
+   * @param {string} receivedToken
+   */
+  async function loginWithToken(receivedToken) {
+    if (receivedToken) {
+      setToken(receivedToken) // This sets the token in state, localStorage, and Axios headers
+      await fetchUser() // This fetches the user data and sets isAuthenticated to true
+    }
+  }
+
   return {
     token,
     user,
@@ -101,6 +113,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     fetchUser,
+    loginWithToken,
     attemptLoginFromToken,
   }
 })

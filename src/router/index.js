@@ -47,7 +47,7 @@ const routes = [
       {
         path: 'team',
         name: 'admin-team',
-        component: { template: '<div><h1>Team Management</h1></div>' },
+        component: () => import('@/views/admin/TeamView.vue'),
       },
       // The import path was incorrect. It is now fixed.
       {
@@ -99,13 +99,13 @@ const routes = [
             component: () => import('@/views/admin/services/pricingRule/CreatePricingRuleView.vue'),
             props: true,
           },
-          // You will also need an edit route eventually
-          // {
-          //   path: 'pricing-rules/:ruleId/edit',
-          //   name: 'admin-service-pricing-rule-edit',
-          //   component: () => import('@/views/admin/services/EditPricingRuleView.vue'),
-          //   props: true,
-          // },
+          {
+            path: 'pricing-rules/:ruleId/edit',
+            name: 'admin-service-pricing-rule-edit',
+            // This will likely re-use your CreatePricingRuleView or a new Edit view
+            component: () => import('@/views/admin/services/pricingRule/EditPricingRuleView.vue'), // Assuming you reuse the create view for edit
+            props: true, // This will pass both `id` and `ruleId` as props
+          },
           {
             path: 'coupons',
             name: 'admin-service-coupons',
@@ -136,6 +136,12 @@ const routes = [
   },
 
   // --- Fallback Route ---
+  {
+    path: '/set-password/:token',
+    name: 'set-password',
+    component: () => import('@/views/auth/SetPasswordView.vue'),
+    props: true, // This will pass the ':token' as a prop to the component
+  },
   { path: '/:pathMatch(.*)*', redirect: '/admin/dashboard' },
 ]
 

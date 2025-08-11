@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 // --- 1. IMPORT the new sortable hook ---
 import { useSortable } from '@vueuse/integrations/useSortable'
@@ -34,6 +34,10 @@ useSortable(listEl, tierStore.tiers, {
 
 onMounted(() => {
   tierStore.initialize(props.id)
+})
+
+onUnmounted(() => {
+  tierStore.reset()
 })
 
 const handleSave = async () => {

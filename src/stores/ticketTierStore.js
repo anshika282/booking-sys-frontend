@@ -10,12 +10,14 @@ export const useTicketTierStore = defineStore('ticketTiers', () => {
   const tiers = ref([])
   const serviceName = ref('')
   const isLoading = ref(false)
+  const currentServiceId = ref(null) // To track the current service ID
 
   // --- ACTIONS ---
 
   // Fetches the initial data for a given service
   async function initialize(serviceId) {
     isLoading.value = true
+    currentServiceId.value = serviceId
     try {
       const [serviceRes, tiersRes] = await Promise.all([
         api.get(`/services/${serviceId}`),
@@ -105,14 +107,26 @@ export const useTicketTierStore = defineStore('ticketTiers', () => {
   }
 
   async function fetchTicketTiers(serviceId) {
-    if (tiers.value.length > 0) return // Simple cache
+    if (tiers.value.length > 0 && currentServiceId.value === serviceId) {
+      return
+    }
     isLoading.value = true
+    currentServiceId.value = serviceId
     try {
       const response = await api.get(`/services/${serviceId}/ticket-tiers`)
-      tiers.value = response.data.data.map((tier) => ({
-        id: tier.id,
-        label: tier.name, // Keep it simple for dropdowns
-      }))
+      const tierData = response.data.data
+
+      if (Array.isArray(tierData)) {
+        // We only need id and name for the dropdowns
+        tiers.value = tierData.map((tier) => ({
+          id: tier.id,
+          label: tier.name,
+        }))
+        console.log('[Store] Successfully fetched and mapped tiers for dropdowns:', tiers.value)
+      } else {
+        console.error('[Store] API response for tiers was not an array:', tierData)
+        tiers.value = []
+      }
     } catch (error) {
       console.error('Failed to fetch ticket tiers:', error)
       toast({
@@ -125,6 +139,13 @@ export const useTicketTierStore = defineStore('ticketTiers', () => {
     }
   }
 
+  // --- NEW: Reset action ---
+  function reset() {
+    tiers.value = []
+    currentServiceId.value = null
+    serviceName.value = ''
+  }
+
   return {
     tiers,
     serviceName,
@@ -135,5 +156,6 @@ export const useTicketTierStore = defineStore('ticketTiers', () => {
     reorderTier,
     saveTiers,
     fetchTicketTiers,
+    reset,
   }
 })

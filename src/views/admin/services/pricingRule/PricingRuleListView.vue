@@ -13,6 +13,17 @@ import DatePicker from '@/components/ui/date-picker/DatePicker.vue'
 import { RangeCalendar } from '@/components/ui/range-calendar'
 import { Calendar } from '@/components/ui/calendar'
 import { today, getLocalTimeZone } from '@internationalized/date'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from '@/components/ui/alert-dialog'
 
 import { GripVertical, PlusCircle, Edit, Trash2 } from 'lucide-vue-next'
 
@@ -23,6 +34,11 @@ const props = defineProps({
 const store = usePricingRuleStore()
 const router = useRouter()
 const listEl = ref(null)
+
+// --- State for the delete confirmation ---
+const isDeleteDialogOpen = ref(false)
+const ruleToDelete = ref(null)
+
 useSortable(listEl, store.rules, {
   handle: '.handle',
   animation: 150,
@@ -34,6 +50,17 @@ useSortable(listEl, store.rules, {
 onMounted(() => {
   store.initialize(props.id)
 })
+
+const openDeleteDialog = (rule) => {
+  ruleToDelete.value = rule
+  isDeleteDialogOpen.value = true
+}
+
+const confirmDelete = async () => {
+  if (!ruleToDelete.value) return
+  await store.deleteRule(props.id, ruleToDelete.value.id)
+  isDeleteDialogOpen.value = false
+}
 
 // A computed property to detect if the order has changed
 const hasOrderChanged = computed(() => {
@@ -51,6 +78,13 @@ const draggableRules = computed({
     store.updateRuleOrder(newOrder)
   },
 })
+
+const formatCategory = (category) => {
+  if (!category) return ''
+  return category
+    .replace(/_/g, ' ') // Replace underscores with spaces
+    .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize first letter of each word
+}
 </script>
 
 <template>
@@ -72,7 +106,7 @@ const draggableRules = computed({
           {{ store.isLoading ? 'Saving...' : 'Save Order' }}
         </Button>
         <RouterLink :to="{ name: 'admin-service-pricing-rule-create', params: { id: props.id } }">
-          <Button variant="outline">
+          <Button>
             <PlusCircle class="h-4 w-4 mr-2" />
             Add New Rule
           </Button>
@@ -93,16 +127,41 @@ const draggableRules = computed({
             <p class="text-sm text-muted-foreground">{{ rule.type }}</p>
           </div>
           <Badge :variant="rule.category === 'discount' ? 'secondary' : 'outline'">{{
-            rule.category.replace('_', ' ')
+            formatCategory(rule.category)
           }}</Badge>
           <Badge :variant="rule.active ? 'default' : 'destructive'">{{
             rule.active ? 'Active' : 'Inactive'
           }}</Badge>
+
           <div class="flex gap-1">
-            <Button variant="ghost" size="icon"><Edit class="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" class="text-destructive"
-              ><Trash2 class="h-4 w-4"
-            /></Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <RouterLink
+                    :to="{
+                      name: 'admin-service-pricing-rule-edit',
+                      params: { id: props.id, ruleId: rule.id },
+                    }"
+                  >
+                    <Button variant="ghost" size="icon"><Edit class="h-4 w-4" /></Button>
+                  </RouterLink>
+                </TooltipTrigger>
+                <TooltipContent><p>Edit Rule</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    @click="openDeleteDialog(rule)"
+                    class="text-destructive"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Delete Rule</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
@@ -112,4 +171,21 @@ const draggableRules = computed({
       </div>
     </CardContent>
   </Card>
+
+  <!-- Delete Confirmation Dialog -->
+  <AlertDialog :open="isDeleteDialogOpen" @update:open="isDeleteDialogOpen = $event">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+        <AlertDialogDescription>
+          This will permanently delete the rule "{{ ruleToDelete?.name }}". This action cannot be
+          undone.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancel</AlertDialogCancel>
+        <AlertDialogAction @click="confirmDelete">Confirm Delete</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 </template>

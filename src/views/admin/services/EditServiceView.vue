@@ -23,7 +23,7 @@ const activeTab = computed(() => {
   if (route.name?.includes('-details')) return 'details'
   if (route.name?.includes('-operating-hours')) return 'schedule'
   if (route.name?.includes('-ticket-tiers')) return 'tiers'
-  if (route.name?.includes('-pricing-rules')) return 'pricing-rules'
+  if (route.name?.includes('-pricing-rule')) return 'pricing-rules'
   if (route.name?.includes('-coupon')) return 'coupons'
   if (route.name?.includes('-add-ons')) return 'add-ons'
   return 'details' // Default to the details tab

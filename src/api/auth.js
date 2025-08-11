@@ -29,3 +29,10 @@ export const getMe = () => {
 
 // We can add other auth-related API calls here later
 // export const logoutUser = () => api.post('/auth/logout');
+/**
+ * Sends the password reset data to the backend.
+ * @param {object} data - Contains token, email, password, and password_confirmation.
+ */
+export const resetPassword = (data) => {
+  return api.post('/auth/reset-password', data)
+}
