@@ -1,15 +1,13 @@
 import { fileURLToPath, URL } from 'node:url'
-
+import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import vueJsx from '@vitejs/plugin-vue-jsx'
-import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwind from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), vueJsx(), vueDevTools()],
+  plugins: [vue()],
   css: {
     postcss: {
       plugins: [tailwind(), autoprefixer()],
@@ -21,16 +19,24 @@ export default defineConfig({
     },
   },
   build: {
-    lib: {
-      // Could also be a dictionary or array of multiple entry points
-      entry: resolve(__dirname, 'src/widget.js'),
-      name: 'BookingWidget',
-      // the proper extensions will be added
-      fileName: 'widget',
+    rollupOptions: {
+      input: {
+        // Entry for the main Admin Dashboard App
+        app: resolve(__dirname, 'index.html'),
+        // Entry for the Iframe Booking App
+        iframe: resolve(__dirname, 'iframe.html'),
+        // Entry for the embeddable SDK script
+        sdk: resolve(__dirname, 'src/sdk.js'),
+      },
+      output: {
+        // Configure output filenames
+        entryFileNames: (chunkInfo) => {
+          if (chunkInfo.name === 'sdk') {
+            return 'widget.js' // Output the SDK as widget.js
+          }
+          return 'assets/[name]-[hash].js'
+        },
+      },
     },
-    // Don't minify for easier debugging during development
-    minify: false,
-    // Make sure CSS is injected into the JS file
-    cssCodeSplit: false,
   },
 })

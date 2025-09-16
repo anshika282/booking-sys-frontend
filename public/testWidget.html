@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tenant Website Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+        }
+
+        .my-button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome to My Awesome Adventure Park!</h1>
+    <p>Click the button below to book your tickets.</p>
+
+    <button class="my-button" data-booking-tenant="070efc7e-fe45-431e-9a0a-5505eef32822"
+        data-booking-service="9a49966d-f665-42e1-9c14-345a04b66a27">
+        Book Now!
+    </button>
+
+    <!-- 
+      This is now the ONLY script tag needed.
+      The `defer` attribute is a best practice. It ensures the script is
+      downloaded without blocking the page, and executes only after the
+      HTML has been fully parsed.
+    -->
+    <script src="http://localhost:5173/dist/widget.js" defer></script>
+</body>
+
+</html>

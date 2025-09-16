@@ -3,6 +3,12 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
+  {
+    path: '/booking-flow',
+    name: 'booking-flow',
+    component: () => import('@/iframe-app/IframeApp.vue'),
+  },
+
   // --- Auth Routes ---
   { path: '/login', name: 'login', component: () => import('@/views/auth/LoginView.vue') },
   { path: '/signup', name: 'signup', component: () => import('@/views/auth/SignUpView.vue') },

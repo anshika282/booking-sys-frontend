@@ -40,7 +40,7 @@ const router = useRouter()
 
 // Form State - separated into logical groups
 const code = ref('')
-const active = ref(true)
+const active = ref(null)
 const max_uses = ref(null)
 const discount_type = ref(null)
 const discount_value = ref(null)
@@ -127,12 +127,7 @@ onMounted(async () => {
 
       // Set basic fields first
       code.value = coupon.code || ''
-      active.value = Boolean(
-        coupon.active === true ||
-          coupon.active === 1 ||
-          coupon.active === '1' ||
-          coupon.active === 'true',
-      )
+      active.value = asBool(coupon.active)
       max_uses.value = coupon.max_uses || null
       discount_type.value = coupon.discount_type || null
 
@@ -392,9 +387,17 @@ const removeDate = (indexToRemove) => {
 }
 
 // This ensures the active state is properly managed as a boolean
-const handleActiveToggle = (newValue) => {
-  active.value = Boolean(newValue)
-  console.log('Toggle changed to:', active.value)
+// const handleActiveToggle = (newValue) => {
+//   active.value = Boolean(newValue)
+//   console.log('Toggle changed to:', active.value)
+// }
+
+function asBool(val) {
+  return val === true || val === 1 || val === '1' || val === 'true'
+}
+
+function handleActiveToggle(next) {
+  active.value = next // Switch already emits a boolean
 }
 </script>
 
@@ -430,13 +433,13 @@ const handleActiveToggle = (newValue) => {
           <div class="flex items-center space-x-2 pt-4">
             <Switch
               id="active-mode"
-              v-model:checked="active"
-              @update:checked="handleActiveToggle"
+              :model-value="active ?? false"
+              @update:model-value="handleActiveToggle"
             />
+            <span class="text-xs text-gray-500">
+              (Currently: {{ active === true ? 'Active' : 'Inactive' }})
+            </span>
             <Label for="active-mode">Coupon is Active</Label>
-            <span class="text-xs text-gray-500"
-              >(Currently: {{ active ? 'Active' : 'Inactive' }})</span
-            >
           </div>
 
           <!-- Date Restriction -->

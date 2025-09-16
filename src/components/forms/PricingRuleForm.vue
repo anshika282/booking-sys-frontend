@@ -463,15 +463,20 @@ onMounted(async () => {
 
           <CardContent class="grid gap-6">
             <Select v-model="condition_type">
-              <SelectTrigger
-                ><SelectValue placeholder="Select a condition type..."
-              /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a condition type..." />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="date">Based on Date</SelectItem>
-                <SelectItem value="ticket_quantity">Based on Ticket Quantity in Cart</SelectItem>
+                <SelectItem value="date">
+                  <SelectItemText>Based on Date</SelectItemText>
+                  <SelectItemIndicator />
+                </SelectItem>
+                <SelectItem value="ticket_quantity">
+                  <SelectItemText>Based on Ticket Quantity in Cart</SelectItemText>
+                  <SelectItemIndicator />
+                </SelectItem>
               </SelectContent>
             </Select>
-
             <div v-if="condition_type" class="p-4 border rounded-lg">
               <!-- Date Condition UI -->
               <div v-if="isDateCondition" class="grid gap-4">
