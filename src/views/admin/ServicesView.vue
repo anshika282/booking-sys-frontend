@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '@/api'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
+import { useToast } from '@/components/ui/toast/use-toast'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Textarea } from '@/components/ui/textarea'
 // --- FINAL, SCREENSHOT-VERIFIED IMPORTS ---
 // These names now exactly match the files in your project directory.
 import { Pagination } from '@/components/ui/pagination'
@@ -31,9 +33,29 @@ import PaginationContent from '@/components/ui/pagination/PaginationContent.vue'
 import PaginationItem from '@/components/ui/pagination/PaginationItem.vue' // Corrected name
 import PaginationNext from '@/components/ui/pagination/PaginationNext.vue'
 import PaginationPrevious from '@/components/ui/pagination/PaginationPrevious.vue' // Corrected name
+// Import useClipboard explicitly from the package
+import { useClipboard } from '@vueuse/core'
+
+// Correct imports from lucide-vue-next for the icons being used
+import { Code, Check } from 'lucide-vue-next'
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 
 const services = ref([])
 const isLoading = ref(true)
+
+const isEmbedModalOpen = ref(false)
+const serviceToEmbed = ref(null)
+
+const { toast } = useToast()
+const { copy, copied } = useClipboard({ legacy: true })
+
 const pagination = ref({
   currentPage: 1,
   lastPage: 1,
@@ -41,6 +63,43 @@ const pagination = ref({
   perPage: 10,
 })
 
+const embedCode = computed(() => {
+  if (!serviceToEmbed.value) return ''
+
+  // IMPORTANT: The domain where the widget.js is hosted.
+  // In production, this should be a CDN or your main site domain.
+  // In development, it's the vite dev server (localhost:5173/dist).
+  const WIDGET_URL = 'http://localhost:5173/dist/widget.js'
+  const TENANT_UUID = '070efc7e-fe45-431e-9a0a-5505eef32822' // Assuming a hardcoded tenant ID for now
+  const SERVICE_UUID = serviceToEmbed.value.uuid
+
+  return `<!-- Booking Widget: ${serviceToEmbed.value.name} -->
+<button 
+  data-booking-tenant="${TENANT_UUID}"
+  data-booking-service="${SERVICE_UUID}"
+  class="your-website-button-style">
+  Book Now!
+</button>
+
+<!-- Required Widget Script (Add to the bottom of your <body>) -->
+<script src="${WIDGET_URL}" defer><\/script>`
+})
+
+const openEmbedModal = (service) => {
+  if (service.status !== 'active') return
+
+  serviceToEmbed.value = service
+  isEmbedModalOpen.value = true
+}
+
+const handleCopy = () => {
+  copy(embedCode.value)
+  toast({
+    title: 'Copied to Clipboard!',
+    description: 'The booking widget code is ready to paste into your website.',
+    class: 'toast-success', // Uses the custom class defined in main.css
+  })
+}
 const fetchServices = async (page = 1) => {
   isLoading.value = true
   try {
@@ -85,6 +144,7 @@ onMounted(() => {
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Duration</TableHead>
+              <TableHead class="w-[100px] text-center">Widget</TableHead>
               <TableHead><span class="sr-only">Actions</span></TableHead>
             </TableRow>
           </TableHeader>
@@ -110,6 +170,26 @@ onMounted(() => {
                 }}</Badge>
               </TableCell>
               <TableCell>{{ service.duration_minutes }} min</TableCell>
+              <TableCell class="text-center">
+                <TooltipProvider>
+                  <Tooltip :open="service.status !== 'active' ? undefined : false">
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        @click="openEmbedModal(service)"
+                        :disabled="service.status !== 'active'"
+                        class="w-full text-xs font-normal h-8"
+                      >
+                        <Code class="h-4 w-4 mr-1" /> Embed Code
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent v-if="service.status !== 'active'">
+                      <p>Widget is inactive. Set status to 'active' to publish.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </TableCell>
               <TableCell class="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
@@ -122,6 +202,12 @@ onMounted(() => {
                     <RouterLink :to="{ name: 'admin-service-edit', params: { id: service.id } }">
                       <DropdownMenuItem> Manage </DropdownMenuItem>
                     </RouterLink>
+                    <DropdownMenuItem
+                      @click="openEmbedModal(service)"
+                      :disabled="service.status !== 'active'"
+                    >
+                      <Code class="h-4 w-4 mr-2" /> Get Embed Code
+                    </DropdownMenuItem>
 
                     <DropdownMenuItem class="text-red-500">Delete</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -177,4 +263,46 @@ onMounted(() => {
       </Pagination>
     </div>
   </div>
+
+  <Dialog v-model:open="isEmbedModalOpen">
+    <DialogContent class="sm:max-w-[800px]">
+      <DialogHeader>
+        <DialogTitle>Embed Widget: {{ serviceToEmbed?.name }}</DialogTitle>
+        <DialogDescription>
+          Copy the code below and paste it into the `&lt;body&gt;` of your website.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="space-y-4">
+        <div
+          class="p-3 rounded-lg bg-yellow-50 text-yellow-800 border border-yellow-200 flex items-center gap-2"
+          role="alert"
+        >
+          <Code class="h-4 w-4" />
+          <p class="text-sm">
+            The widget is currently **ACTIVE** on your site. Changing the service status will
+            disable it.
+          </p>
+        </div>
+
+        <div class="grid w-full gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">Full Widget Code</span>
+            <Button @click="handleCopy" size="sm" :variant="copied ? 'secondary' : 'outline'">
+              <Check v-if="copied" class="h-4 w-4 mr-2" />
+              <Code v-else class="h-4 w-4 mr-2" />
+              {{ copied ? 'Code Copied!' : 'Copy Code' }}
+            </Button>
+          </div>
+          <!-- Use a Textarea for the code -->
+          <Textarea
+            :value="embedCode"
+            rows="10"
+            class="font-mono text-xs cursor-text bg-gray-50 resize-none"
+            readonly
+          />
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
