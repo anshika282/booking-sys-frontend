@@ -38,12 +38,19 @@ const routes = [
       {
         path: 'bookings',
         name: 'admin-bookings',
-        component: { template: '<div><h1>Bookings Management</h1></div>' },
+        component: () => import('@/views/admin/BookingsView.vue'),
       },
       {
         path: 'customers',
         name: 'admin-customers',
-        component: { template: '<div><h1>Customer Management</h1></div>' },
+        component: () => import('@/views/admin/CustomersView.vue'),
+      },
+      // --- NEW: Customer Details Route ---
+      {
+        path: 'customers/:id', // Use the customer ID as a URL parameter
+        name: 'admin-customer-details',
+        component: () => import('@/views/admin/customers/CustomerDetailsView.vue'),
+        props: true, // Pass the ID as a prop
       },
       {
         path: 'analytics',

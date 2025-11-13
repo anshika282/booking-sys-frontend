@@ -32,6 +32,8 @@ const errors = ref({})
 const allLocations = ref([])
 const isLocationDialogOpen = ref(false)
 
+const login_flow_preference = ref('guest_only') // Default to guest_only
+
 // Form state refs
 const name = ref('')
 const service_type = ref(null)
@@ -73,6 +75,7 @@ onMounted(async () => {
       booking_window_max_days.value = service.booking_window.max_days_advance
       slot_consumption_mode.value = service.capacity_consumption_mode
       slot_selection_mode.value = service.slot_selection_mode
+      login_flow_preference.value = service.login_flow_preference || 'guest_only'
 
       if (service_type.value === 'ticketed_event') {
         venue_name.value = service.details.venue_name
@@ -172,6 +175,7 @@ const handleSubmit = async () => {
       booking_window_max_days: booking_window_max_days.value,
       slot_consumption_mode: slot_consumption_mode.value,
       slot_selection_mode: slot_selection_mode.value,
+      login_flow_preference: login_flow_preference.value,
     }
 
     if (service_type.value === 'ticketed_event') {
@@ -192,6 +196,7 @@ const handleSubmit = async () => {
         booking_window_max_days: booking_window_max_days.value,
         requires_waiver: requires_waiver.value,
         location_id: location_id.value,
+        login_flow_preference: login_flow_preference.value,
         // Add other editable fields from your backend request here
         // e.g., slot_selection_mode: slot_selection_mode.value,
       }
@@ -374,6 +379,26 @@ const handleSubmit = async () => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div class="grid gap-2 border-t pt-6">
+              <Label for="login_flow_preference">Customer Login Flow</Label>
+              <Select v-model="login_flow_preference">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a login flow..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="guest_only">Guest Checkout Only</SelectItem>
+                  <SelectItem value="login_at_checkout">Login at Checkout</SelectItem>
+                  <SelectItem value="login_first">Login First</SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-sm text-muted-foreground">
+                Choose how customers interact with your booking widget.
+              </p>
+              <p v-if="errors.login_flow_preference" class="text-sm text-red-500 mt-1">
+                {{ errors.login_flow_preference[0] }}
+              </p>
+            </div>
           </div>
 
           <!-- Conditional Fields -->
@@ -424,7 +449,7 @@ const handleSubmit = async () => {
                   </div>
                   <Switch
                     id="requires-waiver"
-                    :checked="requires_waiver"
+                    v-model:checked="requires_waiver"
                     @update:checked="(newValue) => (requires_waiver = newValue)"
                   />
                 </div>
@@ -481,7 +506,7 @@ const handleSubmit = async () => {
                       If enabled, users must select a staff member.
                     </p>
                   </div>
-                  <Switch id="requires-provider" v-model:checked="requires_provider" />
+                  <Switch id="requires-provider" v-model:checked="requires_waiver" />
                 </div>
               </div>
             </div>
