@@ -8,6 +8,18 @@ const routes = [
     name: 'booking-flow',
     component: () => import('@/iframe-app/IframeApp.vue'),
   },
+  {
+    // Payment success redirect target
+    path: '/booking-flow/success',
+    name: 'booking-success',
+    component: () => import('@/public-booking/BookingSuccessView.vue'),
+  },
+  {
+    // Payment failure redirect target
+    path: '/booking-flow/failure',
+    name: 'booking-failure',
+    component: () => import('@/public-booking/FailureView.vue'),
+  },
 
   // --- Auth Routes ---
   { path: '/login', name: 'login', component: () => import('@/views/auth/LoginView.vue') },
@@ -71,7 +83,7 @@ const routes = [
       {
         path: 'payments',
         name: 'admin-payments',
-        component: { template: '<div><h1>Payment Settings</h1></div>' },
+        component: () => import('@/views/admin/PaymentSettingsView.vue'),
       },
 
       // --- NESTED WIZARD ROUTES for a SPECIFIC service ---

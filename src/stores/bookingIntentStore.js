@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import api from '@/api'
 import { useToast } from '@/components/ui/toast/use-toast'
 import { useCustomerAuthStore } from './customerAuthStore'
+import { useDebounceFn } from '@vueuse/core' // Import debounce from existing library
+import { calculateClientPrice } from '@/lib/priceCalculator'
 
 const { toast } = useToast()
 
@@ -289,31 +291,15 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
     },
 
     async applyCoupon() {
-      if (!this.couponCodeInput.trim()) {
-        this.couponError = 'Please enter a coupon code.'
-        return
-      }
-      this.isApplyingCoupon = true
-      await this.calculatePrice() // Re-use the main price calculation logic
-      this.isApplyingCoupon = false
-
-      // After calculation, check if the coupon was actually applied
-      if (!this.appliedCoupon) {
-        this.couponError = 'This coupon is not valid or cannot be applied to your current order.'
-      } else {
-        toast({
-          title: 'Coupon Applied!',
-          description: `The coupon "${this.couponCodeInput}" has been successfully applied.`,
-          class: 'border-green-500 bg-green-100',
-        })
-      }
+      this.updateClientPrice()
+      this.validatePrice()
     },
 
     // --- NEW ACTION to remove an applied coupon ---
     async removeCoupon() {
       this.couponCodeInput = ''
-      this.couponError = null
-      await this.calculatePrice() // Recalculate the price without the coupon
+      this.updateClientPrice()
+      this.validatePrice()
     },
 
     async saveVisitorInfo(visitorData) {
@@ -350,6 +336,64 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
         return false
       } finally {
         this.isLoading = false
+      }
+    },
+
+    updateClientPrice() {
+      if (!this.service) return
+
+      const intentData = {
+        tickets: this.tickets,
+        addOns: this.addOns,
+        couponCodeInput: this.couponCodeInput,
+      }
+
+      // Use the pure JS calculator function
+      this.priceBreakdown = calculateClientPrice(intentData, this.service)
+    },
+
+    async validatePrice() {
+      if (!this.sessionId || !this.service || this.isCalculatingPrice) return
+
+      this.error = null
+      this.isCalculatingPrice = true
+      this.couponError = null
+
+      try {
+        const payload = {
+          session_id: this.sessionId,
+          date: this.selectedDate,
+          slot_id: this.selectedSlot,
+          tickets: this.tickets.filter((t) => t.quantity > 0),
+          add_ons: this.addOns.filter((a) => a.quantity > 0),
+          coupon_code: this.couponCodeInput,
+        }
+
+        // The backend performs the FINAL, authoritative calculation and saves the intent state.
+        const response = await api.post(
+          `/public/services/${this.service.uuid}/calculate-price`,
+          payload,
+        )
+
+        // The client UI is immediately updated with the authoritative server price.
+        this.priceBreakdown = response.data.price_breakdown
+        this.couponError = response.data.coupon_error // Assuming backend returns specific coupon error
+
+        // UX: Show success toast only if a coupon was just applied/removed
+        if (this.couponCodeInput && !this.couponError && this.priceBreakdown.discounts.length > 0) {
+          toast({
+            title: 'Coupon Confirmed!',
+            description: `Code "${this.couponCodeInput}" has been validated.`,
+            class: 'toast-success',
+          })
+        }
+      } catch (err) {
+        console.error('Server Validation Failed:', err)
+        this.error = 'Price validation failed. Please review your selections.'
+        // If server validation fails, fall back to a zero price to block payment
+        this.priceBreakdown = this.priceBreakdown || { final_total: 0 }
+      } finally {
+        this.isCalculatingPrice = false
       }
     },
   },
