@@ -6,6 +6,7 @@ import TicketsStep from './components/TicketStep.vue'
 import VisitorInfoStep from './components/VisitorInfoStep.vue'
 import { useCustomerAuthStore } from '@/stores/customerAuthStore'
 import LoginPrompt from './components/LoginPrompt.vue'
+import PaymentStep from './components/PaymentStep.vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -28,21 +29,8 @@ const stepComponentMap = {
   tickets: TicketsStep,
   info: VisitorInfoStep,
   login_prompt: LoginPrompt,
-  payment: null, // Payment will be a manual element in the template, or its own file later.
+  payment: PaymentStep, // Payment will be a manual element in the template, or its own file later.
 }
-onMounted(() => {
-  // This logic is moved here from IframeApp.vue
-  const urlParams = new URLSearchParams(window.location.search)
-  const sessionId = urlParams.get('session')
-  hasVerifiedButNotAuthenticated.value = false
-
-  if (sessionId) {
-    store.initialize(sessionId)
-  } else {
-    store.error = 'Configuration error: No session ID provided.'
-    store.currentStep = 'error'
-  }
-})
 
 function handleClose() {
   // Communicate with the parent page (where sdk.js lives) to close the iframe
@@ -247,17 +235,6 @@ const handleBack = () => {
         @skip="handleSkipLogin"
         @submit-visitor-info="store.nextStep()"
       />
-
-      <!-- --- NEW: PAYMENT STEP PLACEHOLDER --- -->
-      <!-- Payment Step Placeholder -->
-      <div v-if="store.currentStepName === 'payment'" class="text-center pt-10">
-        <h3 class="text-xl font-semibold">Ready for Payment</h3>
-        <p class="text-muted-foreground mt-2">
-          Total Charged:
-          <span class="font-bold">₹{{ store.priceBreakdown?.final_total?.toFixed(2) }}</span>
-        </p>
-        <Button class="mt-4" disabled>Initiate Payment</Button>
-      </div>
     </div>
 
     <!-- Footer (Always Visible) -->

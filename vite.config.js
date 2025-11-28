@@ -18,6 +18,21 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // This tells Vite how to handle SPA fallbacks and separate entry points
+    historyApiFallback: {
+      rewrites: [
+        // Rule 1: All Admin/Auth paths use the main index.html
+        { from: /^\/(admin|login|signup|set-password)/, to: '/index.html' },
+
+        // CRITICAL FIX: Rule 2: The /booking-flow path MUST use the dedicated iframe.html
+        { from: /^\/booking-flow/, to: '/iframe.html' },
+
+        // Rule 3: Catch-all fallback for the main index (Optional, but safe)
+        { from: /^\/$/, to: '/index.html' },
+      ],
+    },
+  },
   build: {
     rollupOptions: {
       input: {

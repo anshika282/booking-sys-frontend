@@ -11,17 +11,25 @@ const store = useBookingIntentStore()
 
 // --- THIS IS THE FIX ---
 // The component only needs to do one thing: get the session ID and initialize the store.
+
+function sendReadySignal() {
+  window.parent.postMessage('booking-widget-ready', '*')
+}
 onMounted(() => {
+  // This logic is moved here from IframeApp.vue
   const urlParams = new URLSearchParams(window.location.search)
   const sessionId = urlParams.get('session')
 
   if (sessionId) {
-    // If we have a session ID, call the store's initialize action.
-    store.initialize(sessionId)
+    //store.initialize(sessionId)
+    store.initialize(sessionId).then(() => {
+      // Once the store is initialized (data is loaded), send the signal
+      sendReadySignal()
+    })
   } else {
-    // If the URL is missing the session parameter, it's a critical error.
     store.error = 'Configuration error: No session ID provided.'
     store.currentStep = 'error'
+    sendReadySignal()
   }
 })
 

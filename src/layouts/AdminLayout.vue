@@ -1,4 +1,5 @@
 <script setup>
+import { ref, computed, onMounted } from 'vue'
 import {
   Home,
   Package,
@@ -41,7 +42,7 @@ const navItems = [
   { name: 'Analytics', to: { name: 'admin-analytics' }, icon: LineChart },
   { name: 'Locations', to: { name: 'admin-locations' }, icon: MapPin },
   { name: 'Team', to: { name: 'admin-team' }, icon: CircleUser },
-  { name: 'Payment Settings', to: { name: 'admin-payments' }, icon: CreditCard },
+  { name: 'Payment Settings', to: { name: 'admin-payments' }, icon: CreditCard, ownerOnly: true },
 ]
 
 const router = useRouter()
@@ -51,6 +52,11 @@ const handleLogout = () => {
   authStore.logout()
   router.push({ name: 'login' })
 }
+// --- EXPLANATION 1: Role-Based Access Control (RBAC) ---
+// This computed property checks the authenticated user's role.
+const isOwner = computed(() => {
+  return authStore.user?.role === 'owner'
+})
 </script>
 
 <template>
@@ -86,6 +92,7 @@ const handleLogout = () => {
               custom
             >
               <a
+                v-if="!item.ownerOnly || isOwner"
                 :href="href"
                 @click="navigate"
                 :class="isActive ? 'bg-background text-primary' : 'text-muted-foreground'"
@@ -123,7 +130,7 @@ const handleLogout = () => {
                 class="flex items-center gap-2 text-lg font-semibold mb-4 border-b pb-4"
               >
                 <Rocket class="h-6 w-6 text-primary" />
-                <span>Advensure</span>
+                <span>Booking System</span>
               </RouterLink>
 
               <!-- --- NEW: Mobile Tenant Name --- -->
@@ -141,8 +148,15 @@ const handleLogout = () => {
                 :to="item.to"
                 class="mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground"
               >
-                <component :is="item.icon" class="h-5 w-5" />
-                {{ item.name }}
+                <a
+                  v-if="!item.ownerOnly || isOwner"
+                  :href="href"
+                  @click="navigate"
+                  class="mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 text-muted-foreground hover:text-foreground"
+                >
+                  <component :is="item.icon" class="h-5 w-5" />
+                  {{ item.name }}
+                </a>
               </RouterLink>
             </nav>
           </SheetContent>
@@ -165,6 +179,10 @@ const handleLogout = () => {
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Settings</DropdownMenuItem>
+            <!-- Added Conditional link in dropdown for Owner -->
+            <RouterLink v-if="isOwner" :to="{ name: 'admin-payments' }">
+              <DropdownMenuItem>Payment Settings</DropdownMenuItem>
+            </RouterLink>
             <DropdownMenuSeparator />
             <DropdownMenuItem @click="handleLogout">Logout</DropdownMenuItem>
           </DropdownMenuContent>
