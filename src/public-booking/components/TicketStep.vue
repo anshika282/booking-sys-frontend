@@ -22,7 +22,8 @@ const updateTicketQuantity = (tierId, amount) => {
     // Enforce min and max quantity constraints
     if (newQuantity >= tierInfo.min_quantity && newQuantity <= tierInfo.max_quantity) {
       ticket.quantity = newQuantity
-      store.updateClientPrice()
+      // store.updateClientPrice()
+      store.updateCartAndRecalculate()
     }
   }
 }
@@ -34,17 +35,20 @@ const updateAddOnQuantity = (addOnId, amount) => {
     if (newQuantity >= 0) {
       // Add-ons can have a quantity of 0
       addOn.quantity = newQuantity
-      store.updateClientPrice()
+      //store.updateClientPrice()
+      store.updateCartAndRecalculate()
     }
   }
 }
 onMounted(() => {
-  // CRITICAL FIX 3: On component mount, run the SYNCHRONOUS update first.
-  store.updateClientPrice()
+  // // CRITICAL FIX 3: On component mount, run the SYNCHRONOUS update first.
+  // store.updateClientPrice()
 
-  // CRITICAL FIX 4: Then, run the AUTHORITATIVE network check once.
-  // This fetches the final validated price, applies BOGO, etc., one time.
-  store.validatePrice()
+  // // CRITICAL FIX 4: Then, run the AUTHORITATIVE network check once.
+  // // This fetches the final validated price, applies BOGO, etc., one time.
+  // store.validatePrice()/
+  // On first load, trigger the calculation once.
+  store.updateCartAndRecalculate()
 })
 
 const handleApplyCoupon = () => {
