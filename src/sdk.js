@@ -97,47 +97,114 @@ async function launchWidget(buttonElement) {
   const tenantUuid = buttonElement.getAttribute('data-booking-tenant')
 
   // 1. Show Loader Immediately
-  createLoadingModal()
+  // createLoadingModal()
 
   if (!serviceUuid || !tenantUuid) {
-    removeLoadingModal()
+    // removeLoadingModal()
     console.error('Booking Widget: Button is missing required data attributes.')
     return
   }
 
+  // --- A. Get the button's position for the animation start point ---
+  const buttonRect = buttonElement.getBoundingClientRect()
+
+  //--- B. Create the DOM structure ---
+  // 1. The dark background overlay
+  const overlay = document.createElement('div')
+  overlay.id = 'booking-widget-overlay'
+  overlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 99999; /* Lower z-index */
+    opacity: 0; transition: opacity 0.4s ease-in-out;
+  `
+
+  // 2. The white container that will animate
+  const container = document.createElement('div')
+  container.id = 'booking-widget-container'
+  container.style.cssText = `
+    position: fixed;
+    top: ${buttonRect.top}px;
+    left: ${buttonRect.left}px;
+    width: ${buttonRect.width}px;
+    height: ${buttonRect.height}px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    transform-origin: center;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    z-index: 100000; /* Higher z-index to be on top */
+    opacity: 0; /* Start invisible for the animation */
+  `
+
+  // 3. The loader layer
+  const loader = document.createElement('div')
+  loader.id = 'booking-widget-loader'
+  loader.style.cssText = `
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 1; transition: opacity 0.3s ease-out;
+    z-index: 2; /* CRITICAL FIX: Loader is on top */
+    background: white; /* Loader needs a solid background */
+  `
+  loader.innerHTML = `<div style="width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>`
+
+  // 4. The iframe layer. Also positioned absolutely, underneath the loader.
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = `
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    border: none;
+    opacity: 0; /* Initially hidden */
+    transition: opacity 0.3s ease-in 0.1s;
+    z-index: 1; /* CRITICAL FIX: Iframe is at the bottom */
+  `
+
+  // --- C. Append everything to the DOM ---
+  // Append loader and iframe to the CONTAINER
+  container.appendChild(loader)
+  container.appendChild(iframe)
+
+  // Append BOTH overlay and container to the BODY
+  document.body.appendChild(overlay)
+  document.body.appendChild(container)
+
+  // --- D. Start the animation and API calls ---
+  // Animate the overlay and container into their final positions
+  requestAnimationFrame(() => {
+    overlay.style.opacity = '1'
+    container.style.opacity = '1' // Make container visible
+    container.style.top = '50%'
+    container.style.left = '50%'
+    container.style.width = '450px'
+    container.style.height = '700px'
+    container.style.transform = 'translate(-50%, -50%)'
+  })
+
   // 2. Start Session
   const sessionId = await startBookingSession(serviceUuid)
   if (!sessionId) {
-    removeLoadingModal()
+    // removeLoadingModal()
+    closeWidget()
     alert('Sorry, the booking widget is currently unavailable. Please try again later.')
     return
   }
 
   const appUrl = import.meta.env.VITE_APP_URL
   if (!appUrl) {
-    removeLoadingModal()
+    // removeLoadingModal()
+    closeWidget()
     console.error('Booking Widget Critical Error: VITE_APP_URL is not defined.')
     return
   }
 
   const iframeUrl = new URL(import.meta.env.VITE_APP_URL + '/booking-flow')
   iframeUrl.searchParams.set('session', sessionId)
-
-  // 3. Create Overlay (Hidden Initially)
-  const overlay = document.createElement('div')
-  overlay.id = 'booking-widget-overlay'
-  overlay.style.cssText =
-    'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:99999; display:flex; align-items:center; justify-content:center; opacity: 0; transition: opacity 0.3s ease-in-out;'
-
-  const iframe = document.createElement('iframe')
   iframe.src = iframeUrl.toString()
-  iframe.style.cssText =
-    'width:100%; max-width:450px; height:90%; max-height:700px; border:none; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.2);'
 
-  overlay.appendChild(iframe)
-
-  // 4. Append to DOM immediately so it loads
-  document.body.appendChild(overlay)
+  // overlay.appendChild(iframe)
 
   // 5. Listen for messages from Vue
   const handleMessage = (event) => {
@@ -145,19 +212,53 @@ async function launchWidget(buttonElement) {
 
     // CLOSE EVENT
     if (event.data === 'booking-widget-close') {
-      overlay.style.opacity = '0'
-      setTimeout(() => {
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
-        window.removeEventListener('message', handleMessage)
-      }, 300)
+      // Proactively clear the session from localStorage
+      const storageKey = `booking_session_${serviceUuid}`
+      localStorage.removeItem(storageKey)
+      console.log(`Cleared session from localStorage for key: ${storageKey}`)
+      closeWidget()
     }
 
     // READY EVENT (Switch Loader -> Widget)
     if (event.data === 'booking-widget-ready') {
-      removeLoadingModal() // This removes the spinner
-      overlay.style.opacity = '1' // This shows the actual widget
+      // removeLoadingModal() // This removes the spinner
+      // overlay.style.opacity = '1' // This shows the actual widget
+      // Vue app is ready! Cross-fade the loader and the iframe.
+      loader.style.opacity = '0'
+      setTimeout(() => {
+        loader.style.display = 'none'
+      }, 300)
+      iframe.style.opacity = '1'
     }
   }
+
+  const closeWidget = () => {
+    // Find both elements by their ID to be safe.
+    const overlayEl = document.getElementById('booking-widget-overlay')
+    const containerEl = document.getElementById('booking-widget-container')
+
+    // Animate them out
+    if (containerEl) {
+      containerEl.style.transform = 'translate(-50%, -50%) scale(0.95)'
+      containerEl.style.opacity = '0'
+    }
+    if (overlayEl) {
+      overlayEl.style.opacity = '0'
+    }
+
+    // Remove them from the DOM after the animation
+    setTimeout(() => {
+      if (overlayEl && overlayEl.parentNode) overlayEl.parentNode.removeChild(overlayEl)
+      if (containerEl && containerEl.parentNode) containerEl.parentNode.removeChild(containerEl)
+      window.removeEventListener('message', handleMessage)
+    }, 400) // 400ms matches the transition duration
+  }
+
+  // Add a global style for the spinner animation
+  const styleSheet = document.createElement('style')
+  styleSheet.type = 'text/css'
+  styleSheet.innerText = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`
+  document.head.appendChild(styleSheet)
 
   window.addEventListener('message', handleMessage)
 }

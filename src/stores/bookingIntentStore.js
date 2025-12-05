@@ -88,6 +88,73 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
       this.addOns = []
     },
 
+    // --- THIS IS THE DEBOUNCED AUTHORITATIVE ACTION ---
+    // We define it using useDebounceFn. It will wait 400ms after the last call before executing.
+    validatePriceWithDebounce: useDebounceFn(async function () {
+      if (!this.sessionId || !this.service) return
+
+      this.isCalculatingPrice = true // Keep the shimmer effect active during the API call
+      this.couponError = null
+
+      try {
+        const payload = {
+          session_id: this.sessionId,
+          date: this.selectedDate,
+          slot_id: this.selectedSlot,
+          tickets: this.tickets.filter((t) => t.quantity > 0),
+          add_ons: this.addOns.filter((a) => a.quantity > 0),
+          coupon_code: this.couponCodeInput,
+        }
+
+        // This endpoint MUST persist the intent_data to the database.
+        const response = await api.post(
+          `/public/services/${this.service.uuid}/calculate-price`,
+          payload,
+        )
+
+        // The server's response is the source of truth.
+        this.priceBreakdown = response.data.price_breakdown
+        this.couponError = response.data.coupon_error
+
+        if (this.couponCodeInput && !this.couponError && this.priceBreakdown.discounts.length > 0) {
+          toast({
+            title: 'Coupon Applied!',
+            description: `Code "${this.couponCodeInput}" was successfully validated.`,
+            class: 'toast-success',
+          })
+        } else if (this.couponCodeInput && this.couponError) {
+          toast({
+            title: 'Invalid Coupon',
+            description: this.couponError,
+            variant: 'destructive',
+          })
+        }
+      } catch (err) {
+        console.error('Authoritative price calculation failed:', err)
+        this.error = 'Could not get an accurate price. Please refresh and try again.'
+      } finally {
+        this.isCalculatingPrice = false // Turn off the shimmer effect
+      }
+    }, 400), // 400ms debounce delay
+
+    // --- THIS IS THE NEW ORCHESTRATOR ACTION ---
+    // Components will call this action whenever the cart changes.
+    updateCartAndRecalculate() {
+      // 1. Perform Optimistic Update (Instant)
+      this.isCalculatingPrice = true // Start the shimmer/loading state
+      this.priceBreakdown = calculateClientPrice(
+        {
+          tickets: this.tickets,
+          addOns: this.addOns,
+          couponCodeInput: this.couponCodeInput,
+        },
+        this.service,
+      )
+
+      // 2. Trigger the Debounced Authoritative Update
+      this.validatePriceWithDebounce()
+    },
+
     async fetchDailyManifest(date) {
       this.selectedDate = date
       this.dailyManifest = null
@@ -132,7 +199,8 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
         }))
       }
       this.nextStep()
-      this.calculatePrice()
+      // this.calculatePrice()
+      this.updateCartAndRecalculate()
     },
 
     // --- NEW ACTION ---
@@ -240,7 +308,8 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
               }
             })
           }
-          this.calculatePrice() // Recalculate price with restored data
+          // this.calculatePrice() // Recalculate price with restored data
+          this.updateCartAndRecalculate()
         }
 
         // Edge case: If flow starts with login_prompt and user is already authed, skip it
@@ -256,50 +325,58 @@ export const useBookingIntentStore = defineStore('bookingIntent', {
       }
     },
 
-    async calculatePrice() {
-      if (!this.sessionId) return
+    // async calculatePrice() {
+    //   if (!this.sessionId) return
 
-      this.error = null
-      // Optionally show a small loading indicator next to the price
-      this.isCalculatingPrice = true
-      this.couponError = null
+    //   this.error = null
+    //   // Optionally show a small loading indicator next to the price
+    //   this.isCalculatingPrice = true
+    //   this.couponError = null
 
-      try {
-        const payload = {
-          session_id: this.sessionId,
-          date: this.selectedDate,
-          slot_id: this.selectedSlot,
-          tickets: this.tickets.filter((t) => t.quantity > 0), // Only send tickets with quantity > 0
-          add_ons: this.addOns.filter((a) => a.quantity > 0),
-          coupon_code: this.couponCodeInput,
-        }
+    //   try {
+    //     const payload = {
+    //       session_id: this.sessionId,
+    //       date: this.selectedDate,
+    //       slot_id: this.selectedSlot,
+    //       tickets: this.tickets.filter((t) => t.quantity > 0), // Only send tickets with quantity > 0
+    //       add_ons: this.addOns.filter((a) => a.quantity > 0),
+    //       coupon_code: this.couponCodeInput,
+    //     }
 
-        const response = await api.post(
-          `/public/services/${this.service.uuid}/calculate-price`,
-          payload,
-        )
+    //     const response = await api.post(
+    //       `/public/services/${this.service.uuid}/calculate-price`,
+    //       payload,
+    //     )
 
-        this.priceBreakdown = response.data.price_breakdown
-      } catch (err) {
-        console.error('Price calculation failed:', err)
-        this.error = 'Could not update price. Please try again.'
-        // Optionally reset price breakdown if calculation fails
-        this.priceBreakdown = null
-      } finally {
-        this.isCalculatingPrice = false
-      }
-    },
+    //     this.priceBreakdown = response.data.price_breakdown
+    //   } catch (err) {
+    //     console.error('Price calculation failed:', err)
+    //     this.error = 'Could not update price. Please try again.'
+    //     // Optionally reset price breakdown if calculation fails
+    //     this.priceBreakdown = null
+    //   } finally {
+    //     this.isCalculatingPrice = false
+    //   }
+    // },
 
     async applyCoupon() {
-      this.updateClientPrice()
-      this.validatePrice()
+      // this.updateClientPrice()
+      // this.validatePrice()
+      if (!this.couponCodeInput.trim()) return
+      this.isApplyingCoupon = true
+      // Just call the main orchestrator. It will handle both optimistic and server validation.
+      this.updateCartAndRecalculate()
+      // The `validatePriceWithDebounce` function will handle the toast notifications.
+      this.isApplyingCoupon = false
     },
 
     // --- NEW ACTION to remove an applied coupon ---
     async removeCoupon() {
       this.couponCodeInput = ''
-      this.updateClientPrice()
-      this.validatePrice()
+      // this.updateClientPrice()
+      // this.validatePrice()
+      this.couponError = null
+      this.updateCartAndRecalculate()
     },
 
     async saveVisitorInfo(visitorData) {

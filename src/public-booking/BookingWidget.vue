@@ -202,6 +202,12 @@ const canGoBack = computed(() => {
 const handleBack = () => {
   store.prevStep()
 }
+
+const showTotalInFooter = computed(() => {
+  const currentStep = store.currentStepName
+  // The total should only be visible on these specific steps
+  return currentStep === 'tickets'
+})
 </script>
 
 <template>
@@ -248,7 +254,11 @@ const handleBack = () => {
 
       <div class="flex items-center gap-4">
         <!-- --- NEW: Dynamic Price Display --- -->
-        <div class="text-right">
+        <div
+          class="text-right transition-opacity duration-200"
+          :class="{ 'opacity-60 animate-pulse': store.isCalculatingPrice }"
+          v-if="showTotalInFooter"
+        >
           <p class="text-sm text-muted-foreground">Total</p>
           <div v-if="store.isCalculatingPrice" class="text-xl font-bold">...</div>
           <div v-else-if="store.priceBreakdown">
