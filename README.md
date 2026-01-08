@@ -378,3 +378,107 @@ For the next developer, these are the logic "Gaps" mentioned:
 *   **Real-time:** Check `Echo` listeners for events related to coupons and slot locks.
 *   **Services:** Ensure the dashboard filters services based on their `status` (don't show 'archived' services in the main analytics).
 *   **Security:** Always check `authStore.role` before performing any "Destructive" action (Delete/Edit).
+
+---
+
+# Booking Widget: Front-End Core & SDK Documentation
+
+This section of the documentation is dedicated to the **BigQ Booking Widget**—the customer-facing interface designed to be embedded into external CRMs or websites. 
+
+> **Note to Developers:** The Widget is architecturally distinct from the Admin Dashboard. It is built as a lightweight, high-performance "Wizard" designed for speed and state persistency.
+
+---
+
+## 1. Architectural Philosophy
+The Widget operates as a **Stateful Micro-App**. 
+*   **Decoupled UI:** While the Dashboard uses a sidebar/complex-navigation layout, the Widget uses a **linear flow** (Step 1 → Step 2 → Step 3).
+*   **Session-First:** It relies heavily on a "Booking Intent" session to ensure that users never lose their progress, even if they accidentally close the browser or the host CRM page refreshes.
+
+---
+
+## 2. Session Management (The "Heart" of the Widget)
+Unlike the Admin panel which uses standard JWT auth, the Widget uses a **Session-Based Identity** system via the `booking_intents` table.
+
+### How it works:
+1.  **Initial Load:** When the widget loads, it checks `localStorage` for a `booking_session_id`.
+2.  **New Session:** If no ID is found, it calls `POST /api/v1/booking-intents` to create a "Shopping Cart" in the database.
+3.  **Persistence:** The returned `session_id` is stored locally. Every subsequent action (selecting a ticket, picking a time) is a `PUT` request to that specific ID.
+4.  **Resumption Logic:** If a user returns after an hour, the Widget calls `GET /api/v1/booking-intents/{id}/resume`. This "Hydrates" the UI, automatically jumping the user back to the exact step where they left off.
+
+---
+
+## 3. SDK Integration & Usage
+The Widget utilizes two primary SDKs to handle data and real-time reactivity.
+
+### A. Axios (The Data SDK)
+Used for all "Transactional" movements. 
+*   **Custom Wrapper:** Found in `src/api/widget-api.js`. 
+*   **Logic:** It automatically injects the `X-Booking-Session` header into every request. This ensures the backend knows exactly which "Cart" is being modified without requiring a user to log in.
+
+### B. Laravel Echo / Pusher (The Real-Time SDK)
+This is used for **Optimistic Locking** and **Live Pricing**.
+*   **Channel:** `private-intent.{sessionId}`
+*   **Implementation Logic:**
+    ```javascript
+    // Subscribing to intent-specific updates
+    Echo.private(`intent.${sessionId}`)
+        .listen('PriceUpdated', (e) => {
+            // Update the 'Total Amount' in the widget footer immediately
+            widgetStore.total = e.newTotal;
+        })
+        .listen('SlotLocked', (e) => {
+            // If the user takes too long, and a slot expires, notify them
+            toast.error("Your selected time slot has expired and been released.");
+            widgetStore.resetToStep('availability');
+        });
+    ```
+
+---
+
+## 4. The UI Flow Logic
+The Widget UI is driven by a `currentStep` controller. The files are located in `src/components/widget/`.
+
+| Step | View/Component | Logic Performed |
+| :--- | :--- | :--- |
+| **01: Discovery** | `ServiceSelector.vue` | Fetches services based on the `tenant_id` passed via the Widget URL. |
+| **02: Configuration**| `TierSelector.vue` | Handles ticket quantities. Updates the `intent_data` JSON. |
+| **03: Availability** | `WidgetCalendar.vue` | Displays slots. Triggers the "Lock" logic on the backend to hold the spot. |
+| **04: Details** | `CustomerForm.vue` | Collects name, email, and phone. Maps to the `customers` table. |
+| **05: Checkout** | `PaymentGateway.vue` | Handles the final confirmation and triggers the "Booking Conversion." |
+
+---
+
+## 5. Guide for New Developers: Making Changes
+
+### How to add a new step:
+1.  **Modify the Store:** Add a new state in `useWidgetStore.js` to track the data for that step.
+2.  **Create the Component:** Build the `.vue` file in `src/components/widget/steps/`.
+3.  **Update the Controller:** In `WidgetMain.vue`, add your new component to the `v-if / v-else` or dynamic component list.
+4.  **Sync with API:** Ensure that when the user clicks "Next," you call the `updateIntent()` method to save that step's data to the backend.
+
+### How to change the Theme/Styling:
+The Widget uses **CSS Variables** for easy white-labeling. 
+*   **Logic:** The Widget fetches `tenant_settings` on load.
+*   **Action:** You can override styles globally by modifying the `:root` variables in `src/assets/widget.css`. 
+    *   Example: `--widget-primary-color: tenantData.brand_color;`
+
+---
+
+## 6. Widget Communication (Iframe Logic)
+If you are embedding this widget into a CRM, it uses **Window PostMessage API** to talk to the parent site.
+*   **Logic:** When a booking is confirmed, the widget sends a message:
+    ```javascript
+    window.parent.postMessage({
+        event: 'booking_completed',
+        data: { reference: 'BK-12345', email: 'user@example.com' }
+    }, '*');
+    ```
+*   **Developer Action:** The host CRM can listen for this message to automatically close the widget or refresh the CRM's internal lead list.
+
+---
+
+### Summary Checklist for Customization:
+*   **State:** Check `useWidgetStore.js` for the current flow state.
+*   **API:** All widget-specific calls are in `src/services/widgetService.js`.
+*   **Real-time:** Ensure Pusher credentials are set in `.env` for slot locking to work.
+*   **UI:** The widget is responsive by default—ensure any new components use Tailwind's `sm:` and `md:` utilities to maintain mobile compatibility.
