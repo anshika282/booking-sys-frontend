@@ -277,3 +277,104 @@ In `BookingList.vue` and `CustomerList.vue`:
 2.  **To fix a bug in the Booking steps:** Look at `booking/BookingFlow.vue`.
 3.  **To add a field to the Service Form:** Edit `admin/services/ServiceEditor.vue` and its child component `ServiceForm.vue`.
 4.  **To change the redirect logic after login:** Edit `auth/LoginView.vue`.
+
+---
+
+# 🚀 Advanced Logic: Real-Time Features & Permissions
+
+## 1. Real-Time Coupon Tracking (The "Pusher" Logic)
+This feature allows Admin staff to see live "Financial Activity" in the dashboard. When a customer applies a coupon in the **BigQ Booking Widget**, the admin panel updates instantly without a refresh.
+
+### The Logic Flow:
+1.  **Trigger (The Widget):** The customer enters a code in `AddCoupon.vue`. The frontend calls `PUT /booking-intents/{id}/coupons`.
+2.  **Broadcasting (The Backend):** Upon successful validation, the backend fires a `CouponApplied` event to **Pusher/WebSockets**.
+3.  **Reception (Admin Dashboard):** The Admin's browser is listening on a private tenant channel.
+
+### How to Build/Implement the Frontend Listener:
+In your `Dashboard.vue` or a dedicated `ActivityStore.js`, you implement the following logic:
+
+```javascript
+// Logic for real-time coupon tracking
+Echo.private(`tenant.${tenantId}`)
+    .listen('CouponApplied', (e) => {
+        // 1. Update the 'Live Activity' feed
+        activityStore.pushNotification({
+            message: `Coupon "${e.coupon_code}" applied to a new intent!`,
+            type: 'success'
+        });
+        
+        // 2. Refresh the 'Estimated Revenue' if the coupon changes the total
+        adminStore.updateLiveStats(e.new_total);
+    });
+```
+*   **Key Benefit:** Admins can see marketing campaigns working in real-time. If a "FLASH20" code is being used 50 times in a minute, the admin knows the campaign is successful.
+
+---
+
+## 2. Dashboard: Service Intelligence & Visibility
+The Dashboard doesn't just list services; it provides **Service Intelligence**. This helps the tenant understand which parts of their business are performing.
+
+### Service Metrics Logic:
+The Dashboard fetches data from `GET /analytics/services`. The UI then processes this into three views:
+*   **The Popularity Logic:** Sorts services by `bookings_count`. This is shown in a "Top Performing Services" widget.
+*   **The Capacity Logic:** Calculates `(booked_slots / total_slots) * 100`. If a service is at 90% capacity, the dashboard highlights it in **Red**, signaling the admin to open more slots.
+*   **The Revenue Logic:** Shows which specific service type (e.g., "Zipline" vs "Guided Tour") is generating the most cash flow.
+
+---
+
+## 3. Role-Based Access Control (RBAC)
+The system differentiates between **Owners**, **Admins**, and **Staff**. This is enforced using "Gatekeeper Logic" in both the UI and the Router.
+
+### Role Definitions:
+| Role | Level | Access Logic |
+| :--- | :--- | :--- |
+| **Owner** | God Mode | Access to Billing, Tenant Settings, Deleting Services, Managing Staff, Full Analytics. |
+| **Admin** | Management | Access to Editing Services, Managing Bookings, Viewing Analytics, Issuing Refunds. |
+| **Staff** | Operational | Access to Booking List, Customer Check-in (QR Scanning), viewing Availability. *Cannot* see revenue or edit services. |
+
+### How the Logic is Enforced:
+
+#### A. The UI Directive Logic (Hiding Buttons)
+We use a custom helper (or a `v-if`) to check permissions before rendering a button.
+```vue
+<!-- Only Owners can see the Delete button -->
+<button v-if="authStore.hasRole('owner')" @click="deleteService">
+  Delete Service
+</button>
+
+<!-- Staff can only see the 'Check-in' button -->
+<button v-if="authStore.hasRole('staff')" @click="checkIn">
+  Scan QR Code
+</button>
+```
+
+#### B. The Router Guard Logic (Protecting Pages)
+If a "Staff" member tries to manually type `/admin/settings/billing` into the URL bar, the **Navigation Guard** in `router/index.js` blocks them:
+```javascript
+router.beforeEach((to, from, next) => {
+  const userRole = authStore.role;
+  
+  // If page requires 'owner' and user is 'staff', redirect to dashboard
+  if (to.meta.requiresOwner && userRole !== 'owner') {
+    next({ name: 'AdminDashboard', query: { error: 'unauthorized' } });
+  } else {
+    next();
+  }
+});
+```
+
+---
+
+## 4. Feature Logic Still To Be Built (Roadmap)
+For the next developer, these are the logic "Gaps" mentioned:
+
+1.  **Pusher Activity Feed:** A sidebar in the Admin Panel that shows a scrolling list of real-time events (e.g., "User X just selected a slot," "User Y applied a coupon").
+2.  **The "Booking Widget" Session Sync:** Logic to ensure that if a user starts a booking in the widget on a mobile phone and moves to a desktop, the "Booking Intent" is synced via their email or phone number.
+3.  **Owner-Only Financial Reports:** Building the logic for CSV/PDF exports of tax-ready financial data, which is strictly restricted to the `owner` role.
+
+---
+
+### Summary Checklist for New Developer:
+*   **Real-time:** Check `Echo` listeners for events related to coupons and slot locks.
+*   **Services:** Ensure the dashboard filters services based on their `status` (don't show 'archived' services in the main analytics).
+*   **Security:** Always check `authStore.role` before performing any "Destructive" action (Delete/Edit).
