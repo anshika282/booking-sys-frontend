@@ -193,3 +193,87 @@ To prevent the app from crashing, the API layer has three levels of fallbacks:
 
 ### Important Developer Note:
 > **Never** hardcode the API URL in components. Always use the `VITE_API_BASE_URL` environment variable. This ensures that when you move from development to production, the frontend automatically knows where the new server is.
+
+---
+
+# Complete View File Directory & Logic Mapping
+
+This section maps the physical files in `src/views/` to their actual functionality.
+
+## 1. Public / Customer-Facing Views
+These pages are accessible to the end-users (customers) making bookings.
+
+| View File | Purpose | Components Used | Pinia Store |
+| :--- | :--- | :--- | :--- |
+| `HomeView.vue` | **Service Discovery:** Landing page to browse services. | `ServiceCard.vue`, `CategoryFilter.vue`, `HeroSection.vue` | `useServiceStore` |
+| `booking/BookingFlow.vue` | **Step-by-Step Engine:** The main multi-step booking controller. | `StepProgress.vue`, `TicketSelector.vue`, `SlotPicker.vue`, `AddonSelector.vue` | `useBookingStore`, `useIntentStore` |
+| `booking/ResumeView.vue` | **Session Recovery:** Restores a booking from a link. | `LoadingSpinner.vue` | `useIntentStore` |
+| `booking/SuccessView.vue` | **Confirmation:** Shows the final QR code and booking ref. | `QRCodeGenerator.vue`, `Confetti.vue`, `ReceiptDetails.vue` | `useBookingStore` |
+
+### 🧠 Logic Deep-Dive: `BookingFlow.vue`
+This is a **State-Machine View**. 
+*   **The "Step" Logic:** It maintains a `currentStep` integer. It uses a `switch` statement or a computed component to render the correct UI for the current step (e.g., Step 1: Tickets, Step 2: Date/Time).
+*   **The "Guard" Logic:** You cannot skip to Step 3 if Step 2 data is missing. The logic validates the `intentStore.data` before allowing the "Next" button to function.
+*   **The "Sync" Logic:** Every time a user completes a step, the view calls `intentStore.updateRemote()`, which syncs the progress to the database via `PUT /booking-intents/{id}`.
+
+---
+
+## 2. Administrative Views (`/admin`)
+These pages are protected by the `AuthGuard` and are only for Tenant staff.
+
+| View File | Purpose | Components Used | Pinia Store |
+| :--- | :--- | :--- | :--- |
+| `admin/Dashboard.vue` | **Real-time Stats:** Overview of revenue and traffic. | `RevenueChart.vue`, `StatCard.vue`, `ActiveIntentsList.vue` | `useAdminStore` |
+| `admin/services/ServiceList.vue` | **Catalog Management:** Table view of all services. | `DataTable.vue`, `StatusToggle.vue`, `ActionButtons.vue` | `useServiceStore` |
+| `admin/services/ServiceEditor.vue` | **The "God Form":** Complex CRUD for services. | `ServiceForm.vue`, `TierTable.vue`, `OperatingHoursGrid.vue` | `useServiceStore` |
+| `admin/bookings/BookingList.vue` | **Transaction Log:** Filterable list of all orders. | `FilterBar.vue`, `BookingExportButton.vue`, `StatusBadge.vue` | `useBookingStore` |
+| `admin/customers/CustomerList.vue` | **CRM:** List of all customers and their history. | `CustomerProfileModal.vue`, `SearchInput.vue` | `useCustomerStore` |
+| `admin/settings/SettingsView.vue` | **Tenant Profile:** Configuration for billing & domain. | `DomainConfig.vue`, `BillingForm.vue`, `AvatarUpload.vue` | `useTenantStore` |
+
+### 🧠 Logic Deep-Dive: `ServiceEditor.vue` (Add/Edit)
+*   **The "Mode" Logic:** It checks the route. If an `:id` exists, it enters **Edit Mode** and fetches existing data. If not, it stays in **Create Mode**.
+*   **The "Polymorphic" Logic:** This view dynamically changes the `ServiceForm` fields.
+    *   *Logic:* It watches the `service_type` dropdown. If it changes from `appointment` to `ticketed`, it wipes the "Provider" fields and shows the "Venue" fields.
+*   **The "Deep Save" Logic:** When saving, it doesn't just send one request. It sends the core service data, and then maps through the `ticket_tiers` and `pricing_rules` arrays to send sub-resource updates.
+
+---
+
+## 3. Authentication & System Views
+These handle the "Gatekeeping" and error states of the application.
+
+| View File | Purpose | Components Used | Pinia Store |
+| :--- | :--- | :--- | :--- |
+| `auth/LoginView.vue` | **Gateway:** Login for staff/owners. | `LoginForm.vue`, `TenantLogo.vue` | `useAuthStore` |
+| `auth/RegisterView.vue` | **Onboarding:** For new tenants to sign up. | `OnboardingWizard.vue` | `useAuthStore` |
+| `errors/NotFound.vue` | **404 Page:** Fallback for invalid URLs. | `LottieAnimation.vue`, `HomeLink.vue` | N/A |
+| `errors/Unauthorized.vue` | **403 Page:** For users trying to access forbidden admin areas. | `LockIcon.vue` | `useAuthStore` |
+
+### 🧠 Logic Deep-Dive: `LoginView.vue`
+*   **The "Redirect" Logic:** It checks if a `redirect` query exists in the URL (e.g., `/login?redirect=/admin/services`). After a successful login, it pushes the user to that specific page rather than just the dashboard.
+*   **The "Tenant Context" Logic:** When a staff member logs in, the store immediately fetches the `tenant_settings` to set the global theme (colors, logos) before the dashboard renders.
+
+---
+
+## 4. Key Logic Used Across All Pages
+
+### A. The "Dirty State" Check
+In `ServiceEditor.vue` and `SettingsView.vue`, a `isDirty` computed property is used.
+*   **Logic:** It compares a JSON string of the `originalData` with a JSON string of the `formData`. 
+*   **Result:** It prevents the user from accidentally navigating away or refreshing if they have unsaved changes by using the `onBeforeRouteLeave` Vue Router hook.
+
+### B. Skeleton Loading Logic
+Almost every page (Service List, Dashboard, Booking Flow) uses **Skeletons** instead of a single loading spinner.
+*   **Logic:** While `store.loading` is true, the UI renders a "Ghost" version of the components using CSS animations to provide a perceived performance boost.
+
+### C. Server-Side Pagination Logic
+In `BookingList.vue` and `CustomerList.vue`:
+*   **Logic:** The UI doesn't fetch 1,000 bookings. It sends `?page=1&limit=10`. 
+*   **Interaction:** When the user clicks "Next," the view updates the URL query params, which triggers a `watch()` function to re-fetch the data from the API.
+
+---
+
+### Summary Checklist for a New Developer:
+1.  **To change the Homepage:** Look at `HomeView.vue`.
+2.  **To fix a bug in the Booking steps:** Look at `booking/BookingFlow.vue`.
+3.  **To add a field to the Service Form:** Edit `admin/services/ServiceEditor.vue` and its child component `ServiceForm.vue`.
+4.  **To change the redirect logic after login:** Edit `auth/LoginView.vue`.
