@@ -102,3 +102,94 @@ If you are the new developer:
 3.  **To adjust Styling:** Most global variables are in `tailwind.config.js`.
 
 ---
+
+# API Architecture & Communication Manual
+
+This document provides a technical deep-dive into the API integration. As a developer, you will spend most of your time adding or modifying these connections to bring data into the UI.
+
+---
+
+## 1. API Structure & Hierarchy
+The application uses a **layered communication pattern** to ensure code reusability and clean separation of concerns.
+
+### The Hierarchy:
+1.  **Axios Instance (`src/api/axios.js`):** The base configuration. It sets the `baseURL`, `timeout`, and headers. This is where the **Interceptors** live.
+2.  **API Services (`src/services/*.js`):** These are modular files (e.g., `bookingService.js`, `authService.js`). They contain the raw Axios calls. They do **not** manage state; they only return promises.
+3.  **Pinia Stores (`src/stores/*.js`):** Stores call the Services. They handle the "Loading" states and save the returned data into global variables for the UI to use.
+4.  **Vue Components:** Components simply "watch" the Store. They never call the API directly.
+
+---
+
+## 2. Current API Mapping Table
+This table maps the backend endpoints to their specific UI counterparts and the files you need to edit.
+
+| API Endpoint (`/api/v1/`) | UI Feature | Vue Component/View File | Service File |
+| :--- | :--- | :--- | :--- |
+| `POST /auth/login` | User Authentication | `views/auth/LoginView.vue` | `authService.js` |
+| `GET /services` | Service Catalog (Home) | `views/HomeView.vue` | `serviceService.js` |
+| `GET /services/{id}` | Service Details Page | `views/booking/ServiceView.vue` | `serviceService.js` |
+| `GET /services/{id}/availability` | Date/Time Selection | `components/booking/SlotPicker.vue` | `serviceService.js` |
+| `POST /booking-intents` | Initializing "Cart" | `views/booking/BookingFlow.vue` | `bookingService.js` |
+| `PUT /booking-intents/{id}` | Progressing Steps | `views/booking/BookingFlow.vue` | `bookingService.js` |
+| `POST /bookings/confirm` | Payment/Finalization | `views/booking/SuccessView.vue` | `bookingService.js` |
+| `GET /analytics/dashboard` | Admin Stats | `views/admin/Dashboard.vue` | `adminService.js` |
+
+---
+
+## 3. How to Add a New API (Step-by-Step)
+If you need to fetch a new piece of data, follow this strict order:
+
+1.  **Define the Service:** Add a function in the relevant file in `src/services/`.
+    ```javascript
+    // Example in src/services/userService.js
+    export const getUserProfile = () => api.get('/user/profile');
+    ```
+2.  **Update the Store:** Create an action in the Pinia store to handle this service.
+    ```javascript
+    // src/stores/user.js
+    actions: {
+      async fetchProfile() {
+        this.loading = true;
+        this.profile = await getUserProfile();
+        this.loading = false;
+      }
+    }
+    ```
+3.  **Use in Component:**
+    ```javascript
+    const userStore = useUserStore();
+    onMounted(() => userStore.fetchProfile());
+    ```
+
+---
+
+## 4. Session Management & Auth Lifecycle
+
+### A. The "Original Login" Redirect
+The system uses a **JWT (JSON Web Token)** stored in `localStorage` or `cookies`. 
+*   **Default Behavior:** If a user tries to access `/admin` without a token, the `router/index.js` guard catches them and pushes them to `/login`.
+*   **Fallback Logic:** If an API returns a `401 Unauthorized` (meaning the session expired), a **Global Interceptor** triggers.
+
+### B. Global Interceptor Logic (The "Kick-out" Mechanism)
+Located in `src/api/axios.js`, this logic ensures users don't see "broken" data when their session dies:
+1.  **Response Interceptor:** Watches every incoming response.
+2.  **Trigger:** If `error.response.status === 401`.
+3.  **Action:** 
+    *   Calls `authStore.logout()`.
+    *   Clears local storage.
+    *   Redirects to the login page with a query param: `/login?redirect=current-page`.
+    *   Shows a "Session Expired" toast notification.
+
+---
+
+## 5. Fallback & Error Handling
+To prevent the app from crashing, the API layer has three levels of fallbacks:
+
+1.  **Network Fallback:** If the backend is down, the Axios interceptor catches the `Network Error` and displays a "Server Unreachable" message.
+2.  **Data Fallback:** If an API returns an empty set (e.g., no services available), the UI uses a "Empty State" component (e.g., `NoServicesFound.vue`) instead of just a white screen.
+3.  **Route Fallback (404):** Any URL that doesn't match a defined API endpoint or UI route is automatically caught by a `catch-all` route that displays the **404 Not Found** page.
+
+---
+
+### Important Developer Note:
+> **Never** hardcode the API URL in components. Always use the `VITE_API_BASE_URL` environment variable. This ensures that when you move from development to production, the frontend automatically knows where the new server is.
